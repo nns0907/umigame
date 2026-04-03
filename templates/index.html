@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>ウミガメのスープ</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: #f9f9f9;
+      padding: 20px;
+    }
+    .container {
+      max-width: 700px;
+      margin: auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .riddle-box {
+      background-color: #fffbe6;
+      border-left: 6px solid #f0ad4e;
+      padding: 15px;
+      margin-bottom: 20px;
+    }
+    .riddle-box h2 {
+      margin-top: 0;
+      color: #f0ad4e;
+    }
+    .chat-message {
+      margin: 10px 0;
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
+    }
+    .user { color: #007bff; font-weight: bold; }
+    .ai { color: #28a745; font-weight: bold; }
+    form {
+      margin-bottom: 15px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧩 ウミガメのスープ</h1>
+
+    <!-- 強調された問題表示 -->
+    <div class="riddle-box">
+      <h2>🔍 今回のお題</h2>
+      <p style="font-size: 1.2em;"><strong>{{ riddle_question }}</strong></p>
+    </div>
+
+    <!-- チャット履歴表示 -->
+    {% for chat in chat_history %}
+      <div class="chat-message"><span class="user">あなた：</span>{{ chat.user }}</div>
+      <div class="chat-message"><span class="ai">GM：</span>{{ chat.ai }}</div>
+    {% endfor %}
+
+    {% if not game_over %}
+    <!-- 質問フォーム -->
+    <form method="post">
+      <input type="hidden" name="mode" value="question">
+      <label for="user_question">あなたの質問：</label><br>
+      <input type="text" name="user_question" id="user_question" style="width: 100%;" autocomplete="off" required>
+      <button type="submit">質問する</button>
+    </form>
+
+    <!-- 答えチャレンジフォーム -->
+    <form method="post">
+      <input type="hidden" name="mode" value="answer">
+      <label for="user_answer">答えを入力してみる：</label><br>
+      <input type="text" name="user_answer" id="user_answer" style="width: 100%;" autocomplete="off" required>
+      <button type="submit">答えを送信</button>
+    </form>
+    {% else %}
+      <p style="color: green; font-weight: bold;">ゲーム終了！一覧に戻って新しい問題に挑戦してください。</p>
+    {% endif %}
+
+    {% if answer_feedback %}
+      <div style="margin-top: 20px; padding: 15px; background-color: #eef;">
+        {{ answer_feedback|safe }}
+      </div>
+    {% endif %}
+  
+    {% if show_answer %}
+      <div style="margin-top: 20px; padding: 15px; background-color: #eafbea; border: 1px solid #8ccf8c; border-radius: 8px;">
+        <strong>🟢 正解の真相：</strong><br>
+        {{ correct_answer }}
+      </div>
+    {% endif %}
+
+    <!-- 🟢 一覧に戻るボタン -->
+    <div style="margin-top: 15px;">
+      <a href="{{ url_for('index') }}" 
+        class="btn btn-secondary"
+        style="background-color: #6c757d; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none;">
+        ← 一覧に戻る
+      </a>
+    </div>
+    
+  </div>
+</body>
+</html>

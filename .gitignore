@@ -1,0 +1,9 @@
+# Ignore large binary files
+*.bin
+
+# Ignore python cache
+__pycache__/
+*.pyc
+
+# Ignore environment variables
+.env
