@@ -7,11 +7,12 @@
 これを Laravel と React/TypeScript を用いた堅牢な構成に刷新し、チャットデータ等の永続化、およびTailwind CSSによるリッチでモダンなUI（ウミガメのスープの神秘的なテーマに合わせた表現）を実現します。
 
 ## 2. システム構成（変更後）
-* **バックエンド:** Laravel 11.x, PHP
+* **インフラ・環境:** Docker (Laravel Sail) を利用してコンテナ化
+* **バックエンド:** Laravel 11.x, PHP (Dockerコンテナ内で動作)
 * **フロントエンド:** React + Inertia.js + **TypeScript** (保守性・堅牢性向上のため導入)
 * **スタイリング:** Tailwind CSS (Laravel公式のBreeze等のScaffoldingと高相性)
-* **データベース:** SQLite (開発環境向け。本番運用時はMySQL/PostgreSQLへ移行も容易)
-* **データ移行:** 既存の `riddles.db` から初期データをシードバッチ、またはスクリプトで流し込む
+* **データベース:** MySQL または PostgreSQL (Dockerコンテナとして構築)
+* **データ移行:** 既存の `riddles.db` (SQLite) から初期データをシードバッチで新しいデータベースコンテナへ流し込む
 * **LLM連携:** Google Gemini API
 
 ---
