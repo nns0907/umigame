@@ -1,55 +1,23 @@
-# Migration Command History
+# カスタム Docker セットアップ解説
 
-プロジェクトのLaravel移行に伴い、実行した主要なコマンドの履歴を記録するファイルです。
+本プロジェクトでは、Laravel Sail 標準の Dockerfile ではなく、ビルドの安定性を高めるためにカスタマイズした Dockerfile を使用しています。
 
-## 1. Gitの初期設定と現行コードの保存 (完了)
-```bash
-git init
-git add .
-git commit -m "Initial commit and migration spec"
-```
+## なぜカスタムが必要だったのか？
+Laravel Sail が標準で提供する Dockerfile は、1つの `RUN` 命令の中に「OSパッケージの更新」「PHPのインストール」「Node.jsのインストール」など、膨大な処理が詰め込まれています。
 
-## 2. ドキュメント修正のコミットとDocker起動確認 (完了)
-```bash
-# ドキュメントの修正をコミット
-git add docs/
-git commit -m "Update plan to use Docker/Sail"
+このため、**途中でネットワークエラーやタイムアウトが発生すると、それまでのダウンロードがすべて破棄され、最初からやり直しになってしまう** という問題がありました。特に日本のネットワーク環境や Docker Desktop のパスツール問題（credentials）と重なると、ビルドが完了しないリスクがあります。
 
-# Docker Desktopを起動し、起動状況を確認する
-open -a Docker
-docker info
-```
+## 解決策：レイヤーキャッシュの活用
+Dockerfile の `RUN` 命令を機能単位（PHP、Node.js、Composer、ツール群など）で **9段階以上に分割** しました。
 
-## 3. 旧Python環境のクリーンアップとLaravel構築 (完了)
-```bash
-# 旧環境のクリーンアップ
-git rm -r app.py add_riddle.py sample.py templates/ static/
-git commit -m "Remove old Python files before Laravel installation"
+これにより：
+*   **途中保存が可能に**: 例えば PHP のインストールが成功していれば、その後の Node.js で失敗しても、次回は PHP のインストールをスキップして Node.js から再開できます。
+*   **エラー箇所の特定**: どのステップで時間がかかっているか、またはエラーが出ているかが Docker のログ上で明確になります。
 
-# Laravel 11 (PHP 8.4指定) でプロジェクトを生成
-export PATH=$PATH:/Applications/Docker.app/Contents/Resources/bin
-curl -s "https://laravel.build/tmp_laravel?php=84" | bash
+## 適用した Dockerfile (docker/8.4/Dockerfile) 全容
 
-# ファイルの配置移動
-shopt -s dotglob
-mv tmp_laravel/* ./
-rmdir tmp_laravel
-```
-
-## 4. Dockerビルドの安定化とカスタム設定 (完了)
-※公式のDockerfileはネットワークエラー時に最初からやり直しになるため、ステップを分割したカスタム版を作成しました。
-
-```bash
-# カスタムDockerfile用ディレクトリの作成
-mkdir -p docker/8.4
-
-# 必要なランタイム設定ファイルのコピー
-cp vendor/laravel/sail/runtimes/8.4/start-container docker/8.4/
-cp vendor/laravel/sail/runtimes/8.4/supervisord.conf docker/8.4/
-cp vendor/laravel/sail/runtimes/8.4/php.ini docker/8.4/
-
-# 【重要】カスタムDockerfileの生成（可読性とキャッシュ効率を重視）
-cat << 'EOF' > docker/8.4/Dockerfile
+```dockerfile
+# /docker/8.4/Dockerfile
 FROM ubuntu:24.04
 
 LABEL maintainer="Taylor Otwell"
@@ -67,29 +35,29 @@ ENV LANG=C.UTF-8
 ENV SUPERVISOR_PHP_COMMAND="/usr/bin/php -d variables_order=EGPCS /var/www/html/artisan serve --host=0.0.0.0 --port=80"
 ENV SUPERVISOR_PHP_USER="sail"
 
-# Step 1: Timezone
+# Step 1: タイムゾーン設定
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-# Step 2: apt proxy settings
+# Step 2: apt プロキシ/リトライ耐性設定
 RUN echo "Acquire::http::Pipeline-Depth 0;" > /etc/apt/apt.conf.d/99custom && \
     echo "Acquire::http::No-Cache true;" >> /etc/apt/apt.conf.d/99custom && \
     echo "Acquire::BrokenProxy    true;" >> /etc/apt/apt.conf.d/99custom
 
-# Step 3: Base packages
+# Step 3: 基本OSパッケージのインストール
 RUN apt-get update && apt-get install -y \
     gnupg gosu curl ca-certificates zip unzip git \
     supervisor sqlite3 libcap2-bin libpng-dev python3 \
     dnsutils librsvg2-bin fswatch nano \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Step 4: Add PHP PPA
+# Step 4: PHP PPA (リポジトリ) の追加
 RUN mkdir -p /etc/apt/keyrings && \
     curl -sS 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xb8dc7e53946656efbce4c1dd71daeaab4ad4cab6' \
     | gpg --dearmor | tee /etc/apt/keyrings/ppa_ondrej_php.gpg > /dev/null && \
     echo "deb [signed-by=/etc/apt/keyrings/ppa_ondrej_php.gpg] https://ppa.launchpadcontent.net/ondrej/php/ubuntu noble main" \
     > /etc/apt/sources.list.d/ppa_ondrej_php.list
 
-# Step 5: Install PHP 8.4
+# Step 5: PHP 8.4 のインストール (もっとも重いステップ)
 RUN apt-get update && apt-get install -y \
     libgd3 php8.4-cli php8.4-dev \
     php8.4-pgsql php8.4-sqlite3 php8.4-gd \
@@ -100,29 +68,30 @@ RUN apt-get update && apt-get install -y \
     php8.4-memcached php8.4-pcov php8.4-xdebug \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Step 6: Install Composer
+# Step 6: Composer のインストール
 RUN curl -sLS https://getcomposer.org/installer | php -- --install-dir=/usr/bin/ --filename=composer
 
-# Step 7: Install Node.js
+# Step 7: Node.js のインストール
 RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
     echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_VERSION}.x nodistro main" \
     > /etc/apt/sources.list.d/nodesource.list && \
     apt-get update && apt-get install -y nodejs && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Step 8: Install Global NPM Packages
+# Step 8: グローバルパッケージ (pnpm, bun)
 RUN npm install -g pnpm bun && corepack enable
 
-# Step 9: Install MySQL client
+# Step 9: MySQL クライアント
 RUN apt-get update && apt-get install -y $MYSQL_CLIENT \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Step 10: Setup users and permissions
+# Step 10: ユーザー権限とディレクトリ設定
 RUN setcap "cap_net_bind_service=+ep" /usr/bin/php8.4
 RUN groupadd --force -g $WWWGROUP sail
 RUN useradd -ms /bin/bash --no-user-group -g $WWWGROUP -u 1337 sail
 RUN git config --global --add safe.directory /var/www/html
 
+# 設定ファイルのコピー
 COPY start-container /usr/local/bin/start-container
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY php.ini /etc/php/8.4/cli/conf.d/99-sail.ini
@@ -131,24 +100,4 @@ RUN chmod +x /usr/local/bin/start-container
 EXPOSE 80/tcp
 
 ENTRYPOINT ["start-container"]
-EOF
-
-# compose.yaml のビルドコンテキストを修正
-sed -i '' "s|context: './vendor/laravel/sail/runtimes/8.4'|context: './docker/8.4'|g" compose.yaml
-sed -i '' "s|image: 'sail-8.4/app'|image: 'sail-8.4/app'|g" compose.yaml
-
-# コンテナのビルドと起動
-export PATH=$PATH:/Applications/Docker.app/Contents/Resources/bin
-./vendor/bin/sail build
-./vendor/bin/sail up -d
-```
-
-## 5. フロントエンド環境構築 (Breeze: React + TypeScript) (完了)
-```bash
-./vendor/bin/sail composer require laravel/breeze --dev
-./vendor/bin/sail artisan breeze:install react --typescript --dark --no-interaction
-
-# フロントエンドのビルド（これを実行することで実画面が生成される）
-./vendor/bin/sail npm install
-./vendor/bin/sail npm run build
 ```
