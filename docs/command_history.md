@@ -9,18 +9,7 @@ git add .
 git commit -m "Initial commit and migration spec"
 ```
 
-## 2. ドキュメント修正のコミットとDocker起動確認 (完了)
-```bash
-# ドキュメントの修正をコミット
-git add docs/
-git commit -m "Update plan to use Docker/Sail"
-
-# Docker Desktopを起動し、起動状況を確認する
-open -a Docker
-docker info
-```
-
-## 3. 旧Python環境のクリーンアップとLaravel構築 (完了)
+## 2. 旧Python環境のクリーンアップとLaravel構築 (完了)
 ```bash
 # 旧環境のクリーンアップ
 git rm -r app.py add_riddle.py sample.py templates/ static/
@@ -36,119 +25,42 @@ mv tmp_laravel/* ./
 rmdir tmp_laravel
 ```
 
-## 4. Dockerビルドの安定化とカスタム設定 (完了)
-※公式のDockerfileはネットワークエラー時に最初からやり直しになるため、ステップを分割したカスタム版を作成しました。
+## 3. Docker環境の構築 (完了)
+※当初はネットワークエラー対策のためカスタム構成を試行しましたが、最終的に標準構成でのビルドに成功しました。
 
 ```bash
-# カスタムDockerfile用ディレクトリの作成
-mkdir -p docker/8.4
+# Docker Desktopを起動し、起動状況を確認
+open -a Docker
+docker info
 
-# 必要なランタイム設定ファイルのコピー
-cp vendor/laravel/sail/runtimes/8.4/start-container docker/8.4/
-cp vendor/laravel/sail/runtimes/8.4/supervisord.conf docker/8.4/
-cp vendor/laravel/sail/runtimes/8.4/php.ini docker/8.4/
-
-# 【重要】カスタムDockerfileの生成（可読性とキャッシュ効率を重視）
-cat << 'EOF' > docker/8.4/Dockerfile
-FROM ubuntu:24.04
-
-LABEL maintainer="Taylor Otwell"
-
-ARG WWWGROUP
-ARG NODE_VERSION=22
-ARG MYSQL_CLIENT="mysql-client"
-ARG POSTGRES_VERSION=17
-
-WORKDIR /var/www/html
-
-ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=UTC
-ENV LANG=C.UTF-8
-ENV SUPERVISOR_PHP_COMMAND="/usr/bin/php -d variables_order=EGPCS /var/www/html/artisan serve --host=0.0.0.0 --port=80"
-ENV SUPERVISOR_PHP_USER="sail"
-
-# Step 1: Timezone
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-
-# Step 2: apt proxy settings
-RUN echo "Acquire::http::Pipeline-Depth 0;" > /etc/apt/apt.conf.d/99custom && \
-    echo "Acquire::http::No-Cache true;" >> /etc/apt/apt.conf.d/99custom && \
-    echo "Acquire::BrokenProxy    true;" >> /etc/apt/apt.conf.d/99custom
-
-# Step 3: Base packages
-RUN apt-get update && apt-get install -y \
-    gnupg gosu curl ca-certificates zip unzip git \
-    supervisor sqlite3 libcap2-bin libpng-dev python3 \
-    dnsutils librsvg2-bin fswatch nano \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# Step 4: Add PHP PPA
-RUN mkdir -p /etc/apt/keyrings && \
-    curl -sS 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xb8dc7e53946656efbce4c1dd71daeaab4ad4cab6' \
-    | gpg --dearmor | tee /etc/apt/keyrings/ppa_ondrej_php.gpg > /dev/null && \
-    echo "deb [signed-by=/etc/apt/keyrings/ppa_ondrej_php.gpg] https://ppa.launchpadcontent.net/ondrej/php/ubuntu noble main" \
-    > /etc/apt/sources.list.d/ppa_ondrej_php.list
-
-# Step 5: Install PHP 8.4
-RUN apt-get update && apt-get install -y \
-    libgd3 php8.4-cli php8.4-dev \
-    php8.4-pgsql php8.4-sqlite3 php8.4-gd \
-    php8.4-curl php8.4-imap php8.4-mysql php8.4-mbstring \
-    php8.4-xml php8.4-zip php8.4-bcmath php8.4-soap \
-    php8.4-intl php8.4-readline php8.4-ldap \
-    php8.4-msgpack php8.4-igbinary php8.4-redis \
-    php8.4-memcached php8.4-pcov php8.4-xdebug \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# Step 6: Install Composer
-RUN curl -sLS https://getcomposer.org/installer | php -- --install-dir=/usr/bin/ --filename=composer
-
-# Step 7: Install Node.js
-RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
-    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_VERSION}.x nodistro main" \
-    > /etc/apt/sources.list.d/nodesource.list && \
-    apt-get update && apt-get install -y nodejs && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# Step 8: Install Global NPM Packages
-RUN npm install -g pnpm bun && corepack enable
-
-# Step 9: Install MySQL client
-RUN apt-get update && apt-get install -y $MYSQL_CLIENT \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# Step 10: Setup users and permissions
-RUN setcap "cap_net_bind_service=+ep" /usr/bin/php8.4
-RUN groupadd --force -g $WWWGROUP sail
-RUN useradd -ms /bin/bash --no-user-group -g $WWWGROUP -u 1337 sail
-RUN git config --global --add safe.directory /var/www/html
-
-COPY start-container /usr/local/bin/start-container
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-COPY php.ini /etc/php/8.4/cli/conf.d/99-sail.ini
-RUN chmod +x /usr/local/bin/start-container
-
-EXPOSE 80/tcp
-
-ENTRYPOINT ["start-container"]
-EOF
-
-# compose.yaml のビルドコンテキストを修正
-sed -i '' "s|context: './vendor/laravel/sail/runtimes/8.4'|context: './docker/8.4'|g" compose.yaml
-sed -i '' "s|image: 'sail-8.4/app'|image: 'sail-8.4/app'|g" compose.yaml
-
-# コンテナのビルドと起動
+# コンテナのビルド (標準の Dockerfile を使用)
 export PATH=$PATH:/Applications/Docker.app/Contents/Resources/bin
-./vendor/bin/sail build
+./vendor/bin/sail build --no-cache
+
+# コンテナの起動
 ./vendor/bin/sail up -d
 ```
 
-## 5. フロントエンド環境構築 (Breeze: React + TypeScript) (完了)
+## 4. フロントエンド環境構築 (Breeze: React + TypeScript) (完了)
 ```bash
 ./vendor/bin/sail composer require laravel/breeze --dev
 ./vendor/bin/sail artisan breeze:install react --typescript --dark --no-interaction
+```
 
-# フロントエンドのビルド（これを実行することで実画面が生成される）
+## 5. Vite ビルド不具合の解消と正常起動 (完了)
+※初期構築時のバージョン不整合を解消し、アセットのビルドを完了させました。
+
+```bash
+# package.json の Vite 関連パッケージを安定版 (v5系) に修正
+# (AIエージェント経由で修正済み)
+
+# 依存関係のクリーンアップと再インストール
+rm -rf node_modules package-lock.json
 ./vendor/bin/sail npm install
+
+# アセットのビルド (manifest.json の生成)
 ./vendor/bin/sail npm run build
+
+# データベースの最終初期化
+./vendor/bin/sail artisan migrate:fresh --force
 ```
