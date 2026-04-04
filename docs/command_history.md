@@ -41,24 +41,16 @@ export PATH=$PATH:/Applications/Docker.app/Contents/Resources/bin
 ./vendor/bin/sail up -d
 ```
 
-## 4. フロントエンド環境構築 (Breeze: React + TypeScript) (完了)
+## 4. フロントエンド環境の構築とアセットビルド (完了)
+※Laravel Breeze (React + TypeScript) を導入し、Vite によるビルド環境を整えました。
+
 ```bash
+# Laravel Breeze の導入
 ./vendor/bin/sail composer require laravel/breeze --dev
 ./vendor/bin/sail artisan breeze:install react --typescript --dark --no-interaction
-```
 
-## 5. Vite ビルド不具合の解消と正常起動 (完了)
-※初期構築時のバージョン不整合を解消し、アセットのビルドを完了させました。
-
-```bash
-# package.json の Vite 関連パッケージを安定版 (v5系) に修正
-# (AIエージェント経由で修正済み)
-
-# 依存関係のクリーンアップと再インストール
-rm -rf node_modules package-lock.json
+# 依存関係のインストールとアセットのビルド (npm v5安定版構成)
 ./vendor/bin/sail npm install
-
-# アセットのビルド (manifest.json の生成)
 ./vendor/bin/sail npm run build
 
 # データベースの最終初期化
