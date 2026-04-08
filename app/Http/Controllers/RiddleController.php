@@ -25,14 +25,17 @@ class RiddleController extends Controller
     }
 
     /**
-     * 指定された問題のプレイ画面を表示する（未実装）
+     * 指定された問題のプレイ画面を表示する
      *
      * @param int $id 問題ID
-     * @return \Illuminate\Http\RedirectResponse
+     * @return \Inertia\Response
      */
-    public function show(int $id): \Illuminate\Http\RedirectResponse
+    public function show(int $id): \Inertia\Response
     {
-        // 個別画面のロジックは後ほど実装
-        return redirect()->route('riddles.index');
+        $riddle = \App\Models\Riddle::findOrFail($id);
+
+        return Inertia::render('Riddles/Show', [
+            'riddle' => $riddle,
+        ]);
     }
 }

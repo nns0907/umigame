@@ -21,7 +21,7 @@ export default function Index({ riddles }: Props) {
             <section className="space-y-6">
                 <div className="flex flex-col gap-2">
                     <h1 className="text-3xl font-bold text-slate-100 uppercase tracking-tighter">
-                         Riddle List
+                         問題一覧
                     </h1>
                     <p className="text-slate-400 max-w-2xl leading-relaxed">
                         解き明かされるのを待つ、数々の不可解な事件。

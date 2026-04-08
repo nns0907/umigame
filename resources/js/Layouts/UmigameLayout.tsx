@@ -28,7 +28,7 @@ export default function UmigameLayout({ children }: PropsWithChildren) {
             </main>
 
             <footer className="mt-auto border-t border-slate-800 py-8 text-center text-slate-500 text-sm">
-                &copy; {new Date().getFullYear()} Umigame Engine Migration Project
+                &copy; {new Date().getFullYear()} Umigame Engine Project
             </footer>
         </div>
     );
