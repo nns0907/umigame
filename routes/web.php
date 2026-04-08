@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\GameController;
 use App\Http\Controllers\RiddleController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
@@ -11,6 +12,7 @@ Route::get('/', [RiddleController::class, 'index'])->name('riddles.index');
 
 // 個別問題のプレイ画面 (ID指定)
 Route::get('/play/{id}', [RiddleController::class, 'show'])->name('riddles.show');
+Route::post('/play/{id}/chat', [GameController::class, 'chat'])->name('riddles.chat');
 
 // ダッシュボード (認証時のみアクセス可能)
 Route::get('/dashboard', function () {
