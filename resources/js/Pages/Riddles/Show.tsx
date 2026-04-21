@@ -31,8 +31,10 @@ export default function Show({ riddle, chatHistories, isCleared }: Props) {
         text: '',
     });
 
-    const submitPlay = (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
+    const submitPlay = (e?: React.FormEvent) => {
+        e?.preventDefault();
+        if (playForm.processing || (isCleared && playForm.data.mode === 'answer')) return;
+
         playForm.post(route('riddles.chat', { id: riddle.id }), {
             preserveScroll: true,
             onSuccess: () => playForm.reset('text'),
@@ -65,9 +67,9 @@ export default function Show({ riddle, chatHistories, isCleared }: Props) {
         <UmigameLayout>
             <Head title={`Case #${String(riddle.id).padStart(2, '0')}`} />
 
-            <div className="max-w-4xl mx-auto pt-8 relative">
-                <div className="rounded-2xl bg-[#111827] overflow-hidden relative">
-                    <div className="fixed top-16 left-0 right-0 z-[5] px-4">
+            <div className="max-w-4xl mx-auto -mt-8 relative">
+                <div className="rounded-2xl bg-[#111827] relative">
+                    <div className="sticky top-16 z-[5]">
                         <div className="max-w-4xl mx-auto bg-slate-900/90 backdrop-blur px-4 py-2 md:px-5 space-y-1 rounded-t-2xl">
                         <div className="flex items-center justify-between gap-3">
                             <button

@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'gemini' => [
+        // 既存の環境変数名の揺れを吸収する（旧設定との互換用）
+        'api_key' => env('GEMINI_API_KEY', env('GOOGLE_API_KEY', env('GOOGLE_GEMINI_API_KEY'))),
+        'model' => env('GEMINI_MODEL', 'ggemini-2.5-flash'),
+    ],
+
 ];

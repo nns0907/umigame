@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ChatHistory;
 use App\Models\GameSession;
 use App\Models\Riddle;
+use App\Services\GeminiService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -38,10 +39,27 @@ class GameController extends Controller
         $mode = $validated['mode'];
         $isCorrect = false;
 
+        $gemini = app(GeminiService::class);
+
         if ($mode === 'question') {
-            $aiResponse = $this->generateQuestionReply($userText);
+            $aiResponse = $gemini->answerYesNoIrrelevant($riddle->question, $riddle->answer, $userText);
+            if (! $aiResponse) {
+                $reason = $gemini->lastError();
+                $aiResponse = $reason
+                    ? "Geminiに接続できていません（{$reason}）"
+                    : 'Geminiに接続できていません';
+            }
         } else {
-            [$aiResponse, $isCorrect] = $this->judgeAnswer($userText, $riddle->answer);
+            $result = $gemini->judgeAnswer($riddle->question, $riddle->answer, $userText);
+            $aiResponse = $result['reply'];
+            $isCorrect = $result['is_correct'];
+
+            if (! $aiResponse) {
+                $reason = $gemini->lastError();
+                $aiResponse = $reason
+                    ? "Geminiに接続できていません（{$reason}）"
+                    : 'Geminiに接続できていません';
+            }
         }
 
         ChatHistory::create([
@@ -57,37 +75,5 @@ class GameController extends Controller
         }
 
         return redirect()->route('riddles.show', ['id' => $riddle->id]);
-    }
-
-    /**
-     * 質問モードの簡易返答（暫定ロジック）。
-     */
-    private function generateQuestionReply(string $question): string
-    {
-        if (mb_strpos($question, 'なぜ') !== false || mb_strpos($question, 'どうして') !== false) {
-            return '方向性は良いです。事実関係をもう少し具体的に絞って質問してみてください。';
-        }
-
-        if (mb_strpos($question, '犯人') !== false) {
-            return '現時点では「関係ありません」。まず状況の前提を確認すると真相に近づけます。';
-        }
-
-        return 'はい/いいえで答えられる形にすると判定しやすくなります。';
-    }
-
-    /**
-     * 回答モードの簡易正誤判定（暫定ロジック）。
-     */
-    private function judgeAnswer(string $input, string $answer): array
-    {
-        $normalizedInput = mb_strtolower($input);
-        $normalizedAnswer = mb_strtolower($answer);
-        $isCorrect = mb_strpos($normalizedAnswer, $normalizedInput) !== false;
-
-        if ($isCorrect) {
-            return ['正解です。真相に到達しました。', true];
-        }
-
-        return ['不正解です。核心に触れていますが、まだ重要な要素が不足しています。', false];
     }
 }
